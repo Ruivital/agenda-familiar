@@ -15,6 +15,8 @@
     --shadow-color: rgba(0,0,0,0.4);
     --highlight-color: #0b6bff;
     --sidebar-width: 280px;
+    /* Cor de destaque para Fim de Semana e Feriados */
+    --accent-day: #ff9800; 
   }
   html[data-theme='light']{
     --bg:#f5f6f8;
@@ -23,6 +25,7 @@
     --text-primary:#222;
     --border-color: rgba(0,0,0,0.1);
     --shadow-color: rgba(0,0,0,0.1);
+    --accent-day: #e65100;
   }
   *{box-sizing:border-box}
   body{
@@ -33,6 +36,17 @@
     transition: background-color .3s;
     min-height: 100vh;
     overflow-x: hidden;
+  }
+
+  /* Destaque para o número do dia em fins de semana ou feriados */
+  .day.special-day .date {
+    color: var(--accent-day) !important;
+    font-weight: 900;
+    text-shadow: 0px 0px 1px rgba(0,0,0,0.2);
+  }
+  
+  .day.weekend {
+    background: rgba(255, 152, 0, 0.05);
   }
 
   /* Botão de Definições Flutuante */
@@ -118,7 +132,9 @@
   .day {
     background: var(--bg); border-radius: 8px; padding: 8px; min-height: 90px;
     border: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column;
+    transition: transform 0.1s;
   }
+  .day:active { transform: scale(0.95); }
   .day.today { border: 2px solid var(--highlight-color); background: rgba(11, 107, 255, 0.05); }
   
   /* Badges e Cores */
@@ -128,10 +144,11 @@
   
   .A{background:#ffd700;color:#222} .B{background:#0b6b2f} .C{background:#1e90ff} .D{background:#ff00d4} .E{background:#8b0000}
   
-  /* Estilos Lista (REPOSTOS DO ORIGINAL) */
+  /* Estilos Lista */
   .list-container { background: var(--card); border-radius: 12px; border: 1px solid var(--border-color); overflow: hidden; }
   .list-row { display: grid; grid-template-columns: 50px 80px 1fr; padding: 12px; border-bottom: 1px solid var(--border-color); cursor: pointer; align-items: center; }
   .list-row.today { background: rgba(11, 107, 255, 0.1); border-left: 4px solid var(--highlight-color); }
+  .list-row.special-day div:first-child { color: var(--accent-day); font-weight: bold; }
   .list-shifts { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; text-align: center; }
   .list-shift-item { padding: 4px 0; border-radius: 6px; font-size: 12px; font-weight: 700; }
   .list-shift-item.empty { color: var(--muted); opacity: 0.3; }
@@ -218,8 +235,8 @@
 </div>
 
 <script>
+// DADOS DE ESCALA ORIGINAIS (NÃO ALTERAR)
 const year = 2026;
-// ... (Mantendo o scheduleText original aqui por brevidade, use o seu bloco de dados completo)
 const scheduleText = `A C D E B -
 E A C D B -
 D E A C B -
@@ -586,8 +603,30 @@ B D E A C -
 A B C E D -
 E A B C D -`;
 
+// FERIADOS PORTUGAL 2026
+const holidays = [
+  "2026-01-01", // Ano Novo
+  "2026-04-03", // Sexta Santa
+  "2026-04-05", // Páscoa
+  "2026-04-25", // Liberdade
+  "2026-05-01", // Trabalhador
+  "2026-06-04", // Corpo de Deus
+  "2026-06-10", // Dia de Portugal
+  "2026-08-15", // Assunção de Nossa Sra
+  "2026-10-05", // República
+  "2026-11-01", // Todos os Santos
+  "2026-12-01", // Restauração
+  "2026-12-08", // Imaculada Conceição
+  "2026-12-25"  // Natal
+];
+
 const schedule = scheduleText.split('\n').filter(l => l.trim()).map(l => l.replace(/\s/g, '').padEnd(6, '-'));
 let state = { theme: 'dark', displayMode: 'grid', viewMode: 'all', selectedTeam: 'A', currentMonth: new Date().getMonth() };
+
+function isHoliday(date) {
+  const s = date.toISOString().split('T')[0];
+  return holidays.includes(s);
+}
 
 function toggleMenu() {
   document.getElementById('side-panel').classList.toggle('open');
@@ -642,7 +681,6 @@ function render() {
         const list = document.createElement('div');
         list.className = 'list-container';
         
-        // Cabeçalho da Lista (Original)
         const header = document.createElement('div');
         header.className = 'list-row';
         header.style.fontWeight = 'bold';
@@ -651,12 +689,16 @@ function render() {
         list.appendChild(header);
 
         for (let d = 1; d <= daysInMonth; d++) {
+            const dateObj = new Date(year, m, d);
             const curIdx = dayIdx;
             const isToday = is2026 && today.getMonth() === m && today.getDate() === d;
+            const weekday = dateObj.getDay();
+            const special = (weekday === 0 || weekday === 6 || isHoliday(dateObj));
+            
             const row = document.createElement('div');
-            row.className = 'list-row' + (isToday ? ' today' : '');
+            row.className = 'list-row' + (isToday ? ' today' : '') + (special ? ' special-day' : '');
             if(isToday) row.id = 'target-today';
-            row.onclick = () => openPopup(new Date(year, m, d), curIdx);
+            row.onclick = () => openPopup(dateObj, curIdx);
             
             const s = schedule[dayIdx];
             let shiftsHtml = '';
@@ -665,7 +707,7 @@ function render() {
                 shiftsHtml += `<div class="list-shift-item ${letter !== '-' ? letter : 'empty'}">${letter}</div>`;
             }
             
-            row.innerHTML = `<div>${d}</div><div style="color:var(--muted)">${new Date(year, m, d).toLocaleDateString('pt-PT', {weekday:'short'})}</div><div class="list-shifts">${shiftsHtml}</div>`;
+            row.innerHTML = `<div>${d}</div><div style="color:var(--muted)">${dateObj.toLocaleDateString('pt-PT', {weekday:'short'})}</div><div class="list-shifts">${shiftsHtml}</div>`;
             list.appendChild(row);
             dayIdx++;
         }
@@ -674,14 +716,23 @@ function render() {
         const grid = document.createElement('div');
         grid.className = 'calendar';
         ['D','S','T','Q','Q','S','S'].forEach(wd => grid.innerHTML += `<div class="weekday">${wd}</div>`);
-        for(let i=0; i<new Date(year, m, 1).getDay(); i++) grid.innerHTML += `<div></div>`;
+        
+        const firstDayWeekday = new Date(year, m, 1).getDay();
+        for(let i=0; i<firstDayWeekday; i++) grid.innerHTML += `<div></div>`;
+        
         for (let d = 1; d <= daysInMonth; d++) {
             const curIdx = dayIdx;
+            const dateObj = new Date(year, m, d);
+            const weekday = dateObj.getDay();
+            const isWeekend = (weekday === 0 || weekday === 6);
+            const isHolid = isHoliday(dateObj);
             const isToday = is2026 && today.getMonth() === m && today.getDate() === d;
+            
             const dayDiv = document.createElement('div');
-            dayDiv.className = 'day' + (isToday ? ' today' : '');
+            dayDiv.className = 'day' + (isToday ? ' today' : '') + (isWeekend ? ' weekend' : '') + (isWeekend || isHolid ? ' special-day' : '');
             if(isToday) dayDiv.id = 'target-today';
-            dayDiv.onclick = () => openPopup(new Date(year, m, d), curIdx);
+            dayDiv.onclick = () => openPopup(dateObj, curIdx);
+            
             let html = `<div class="date">${d}</div>`;
             if (state.displayMode === 'team') {
                 const s = schedule[dayIdx];
